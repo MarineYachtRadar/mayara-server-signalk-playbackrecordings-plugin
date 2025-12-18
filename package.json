@@ -1,0 +1,46 @@
+{
+  "name": "@marineyachtradar/signalk-playback-plugin",
+  "version": "0.1.0",
+  "description": "MaYaRa Radar Playback - Play .mrr radar recordings through SignalK Radar API (Developer Tool)",
+  "main": "plugin/index.js",
+  "scripts": {
+    "build": "node build.js",
+    "postinstall": "node build.js",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-webapp",
+    "signalk-category-instruments",
+    "radar",
+    "marine",
+    "mayara",
+    "playback",
+    "recording"
+  ],
+  "signalk": {
+    "displayName": "MaYaRa Radar Playback",
+    "appIcon": "assets/MaYaRa_RED.png",
+    "webapp": {
+      "name": "MaYaRa Radar Playback",
+      "description": "Play .mrr radar recordings for testing SignalK Radar API consumers",
+      "location": "/plugins/@marineyachtradar/signalk-playback-plugin/"
+    }
+  },
+  "files": [
+    "plugin/**/*",
+    "build.js"
+  ],
+  "engines": {
+    "signalk": ">=2.0.0"
+  },
+  "dependencies": {
+    "@marineyachtradar/mayara-gui": "^0.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarineYachtRadar/mayara-server-signalk-playbackrecordings-plugin"
+  },
+  "author": "MarineYachtRadar Contributors",
+  "license": "Apache-2.0"
+}

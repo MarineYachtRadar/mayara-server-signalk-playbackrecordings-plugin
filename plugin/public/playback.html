@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MaYaRa Radar Playback</title>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="discovery.css">
+  <style>
+    .playback_container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .playback_header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(100, 200, 180, 0.3);
+    }
+
+    .playback_header h1 {
+      margin: 0;
+      font-size: 28px;
+      color: rgb(100, 200, 180);
+    }
+
+    .playback_section {
+      margin-bottom: 25px;
+      padding: 20px;
+      background: rgba(3, 37, 37, 0.8);
+      border-radius: 8px;
+    }
+
+    .playback_section h2 {
+      margin: 0 0 15px 0;
+      font-size: 18px;
+      color: rgb(100, 200, 180);
+    }
+
+    .file_list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .file_item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      border-bottom: 1px solid rgba(100, 200, 180, 0.1);
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .file_item:hover {
+      background: rgba(100, 200, 180, 0.1);
+    }
+
+    .file_item.selected {
+      background: rgba(100, 200, 180, 0.2);
+      border-left: 3px solid rgb(100, 200, 180);
+    }
+
+    .file_name {
+      font-weight: bold;
+      color: rgb(152, 217, 204);
+    }
+
+    .file_meta {
+      font-size: 12px;
+      color: rgb(120, 160, 150);
+    }
+
+    .file_actions button {
+      padding: 6px 12px;
+      margin-left: 8px;
+      background: transparent;
+      color: rgb(152, 217, 204);
+      border: 1px solid rgba(100, 200, 180, 0.3);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .file_actions button:hover {
+      background: rgba(100, 200, 180, 0.1);
+    }
+
+    .file_actions button.delete {
+      color: rgb(200, 100, 100);
+      border-color: rgba(200, 100, 100, 0.3);
+    }
+
+    .file_actions button.delete:hover {
+      background: rgba(200, 100, 100, 0.1);
+    }
+
+    .upload_zone {
+      border: 2px dashed rgba(100, 200, 180, 0.3);
+      border-radius: 8px;
+      padding: 30px;
+      text-align: center;
+      color: rgb(120, 160, 150);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .upload_zone:hover, .upload_zone.dragover {
+      border-color: rgb(100, 200, 180);
+      background: rgba(100, 200, 180, 0.1);
+    }
+
+    .upload_zone input {
+      display: none;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .controls button {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .controls button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn_play {
+      background: rgb(100, 200, 180);
+      color: #000;
+    }
+
+    .btn_play:hover:not(:disabled) {
+      background: rgb(130, 230, 210);
+    }
+
+    .btn_pause {
+      background: rgba(255, 200, 100, 0.8);
+      color: #000;
+    }
+
+    .btn_stop {
+      background: rgba(200, 100, 100, 0.8);
+      color: #fff;
+    }
+
+    .status_info {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+    }
+
+    .status_row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      color: rgb(180, 200, 200);
+    }
+
+    .status_label {
+      color: rgb(120, 160, 150);
+    }
+
+    .view_link {
+      display: inline-block;
+      margin-top: 15px;
+      padding: 10px 20px;
+      background: rgb(100, 200, 180);
+      color: #000;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+
+    .view_link:hover {
+      background: rgb(130, 230, 210);
+    }
+
+    .checkbox_label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: rgb(180, 200, 200);
+      cursor: pointer;
+    }
+
+    .no_files {
+      padding: 30px;
+      text-align: center;
+      color: rgb(120, 160, 150);
+    }
+
+    .message {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: bold;
+      z-index: 1000;
+      display: none;
+    }
+
+    .message.success {
+      background: rgba(100, 200, 100, 0.9);
+      color: #000;
+    }
+
+    .message.error {
+      background: rgba(200, 100, 100, 0.9);
+      color: #fff;
+    }
+  </style>
+</head>
+<body class="myr_discovery_body">
+  <div class="playback_container">
+    <div class="playback_header">
+      <h1>🎬 Radar Playback</h1>
+    </div>
+
+    <!-- Upload Section -->
+    <div class="playback_section">
+      <h2>Upload Recording</h2>
+      <div class="upload_zone" id="upload_zone">
+        <p>Drop .mrr or .mrr.gz file here</p>
+        <p>or click to browse</p>
+        <input type="file" id="file_input" accept=".mrr,.mrr.gz">
+      </div>
+    </div>
+
+    <!-- Recordings List -->
+    <div class="playback_section">
+      <h2>Available Recordings</h2>
+      <div class="file_list" id="file_list">
+        <div class="no_files">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Playback Controls -->
+    <div class="playback_section">
+      <h2>Playback</h2>
+      <div class="controls">
+        <button class="btn_play" id="btn_play" disabled>▶ Play</button>
+        <button class="btn_pause" id="btn_pause" disabled>⏸ Pause</button>
+        <button class="btn_stop" id="btn_stop" disabled>⏹ Stop</button>
+        <label class="checkbox_label">
+          <input type="checkbox" id="loop_checkbox" checked>
+          Loop
+        </label>
+      </div>
+
+      <div class="status_info" id="status_info" style="display: none;">
+        <div class="status_row">
+          <span class="status_label">File:</span>
+          <span id="status_filename">-</span>
+        </div>
+        <div class="status_row">
+          <span class="status_label">Status:</span>
+          <span id="status_state">-</span>
+        </div>
+        <div class="status_row">
+          <span class="status_label">Position:</span>
+          <span id="status_position">-</span>
+        </div>
+        <div class="status_row">
+          <span class="status_label">Frame:</span>
+          <span id="status_frame">-</span>
+        </div>
+        <a href="#" class="view_link" id="view_link" style="display: none;">View Radar</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="message" id="message"></div>
+
+  <script>
+    // Plugin API routes are at /plugins/<plugin-id>/, not at the webapp path
+    const API_BASE = '/plugins/mayara-server-signalk-playbackrecordings-plugin';
+
+    let selectedFile = null;
+    let loadedFile = null;  // Track currently loaded/playing file
+    let statusInterval = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadRecordings();
+      setupUpload();
+      setupControls();
+    });
+
+    // Load recordings list
+    async function loadRecordings() {
+      try {
+        const res = await fetch(`${API_BASE}/recordings`);
+        const data = await res.json();
+
+        const list = document.getElementById('file_list');
+
+        if (!data.recordings || data.recordings.length === 0) {
+          list.innerHTML = '<div class="no_files">No recordings found. Upload a .mrr file to get started.</div>';
+          return;
+        }
+
+        list.innerHTML = '';
+        data.recordings.forEach(file => {
+          const item = document.createElement('div');
+          item.className = 'file_item';
+          item.dataset.filename = file.filename;
+
+          const duration = formatDuration(file.durationMs || 0);
+          const size = formatSize(file.size || 0);
+
+          item.innerHTML = `
+            <div>
+              <div class="file_name">${file.filename}</div>
+              <div class="file_meta">${duration} • ${size} • ${file.frameCount || '?'} frames</div>
+            </div>
+            <div class="file_actions">
+              <button class="load" onclick="loadFile('${file.filename}'); event.stopPropagation();">Load</button>
+              <button class="delete" onclick="deleteFile('${file.filename}'); event.stopPropagation();">Delete</button>
+            </div>
+          `;
+
+          item.addEventListener('click', () => {
+            document.querySelectorAll('.file_item').forEach(i => i.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedFile = file.filename;
+          });
+
+          list.appendChild(item);
+        });
+      } catch (err) {
+        showMessage('Failed to load recordings: ' + err.message, 'error');
+      }
+    }
+
+    // Setup file upload
+    function setupUpload() {
+      const zone = document.getElementById('upload_zone');
+      const input = document.getElementById('file_input');
+
+      zone.addEventListener('click', () => input.click());
+
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      });
+
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('dragover');
+      });
+
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) {
+          uploadFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      input.addEventListener('change', () => {
+        if (input.files.length > 0) {
+          uploadFile(input.files[0]);
+        }
+      });
+    }
+
+    // Upload file
+    async function uploadFile(file) {
+      try {
+        showMessage('Uploading...', 'success');
+
+        const res = await fetch(`${API_BASE}/recordings/upload`, {
+          method: 'POST',
+          headers: {
+            'Content-Disposition': `attachment; filename="${file.name}"`
+          },
+          body: file
+        });
+
+        if (!res.ok) {
+          throw new Error('Upload failed');
+        }
+
+        showMessage('Upload complete!', 'success');
+        loadRecordings();
+      } catch (err) {
+        showMessage('Upload failed: ' + err.message, 'error');
+      }
+    }
+
+    // Delete file
+    async function deleteFile(filename) {
+      if (!confirm(`Delete "${filename}"?`)) return;
+
+      try {
+        await fetch(`${API_BASE}/recordings/${encodeURIComponent(filename)}`, {
+          method: 'DELETE'
+        });
+        showMessage('Deleted', 'success');
+        loadRecordings();
+      } catch (err) {
+        showMessage('Delete failed: ' + err.message, 'error');
+      }
+    }
+
+    // Load file for playback
+    async function loadFile(filename) {
+      try {
+        // Disable buttons during transition to prevent double-clicks
+        document.getElementById('btn_play').disabled = true;
+        document.getElementById('btn_pause').disabled = true;
+        document.getElementById('btn_stop').disabled = true;
+
+        // If a different file is currently loaded/playing, stop it first
+        if (loadedFile && loadedFile !== filename) {
+          stopStatusPolling();
+          try {
+            await fetch(`${API_BASE}/playback/stop`, { method: 'POST' });
+          } catch (err) {
+            console.log('Stop on file change (expected):', err.message);
+          }
+          loadedFile = null;
+        }
+
+        const res = await fetch(`${API_BASE}/playback/load`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Load failed');
+        }
+
+        const data = await res.json();
+        loadedFile = filename;
+
+        document.getElementById('btn_play').disabled = false;
+        document.getElementById('btn_stop').disabled = false;
+        document.getElementById('status_info').style.display = 'block';
+
+        // Update view link
+        const viewLink = document.getElementById('view_link');
+        viewLink.href = `viewer.html?id=${encodeURIComponent(data.radarId)}`;
+        viewLink.style.display = 'inline-block';
+
+        showMessage(`Loaded: ${filename}`, 'success');
+        startStatusPolling();
+      } catch (err) {
+        showMessage('Load failed: ' + err.message, 'error');
+        // Re-enable play if we had a file loaded before
+        if (loadedFile) {
+          document.getElementById('btn_play').disabled = false;
+          document.getElementById('btn_stop').disabled = false;
+        }
+      }
+    }
+
+    // Setup playback controls
+    function setupControls() {
+      document.getElementById('btn_play').addEventListener('click', async () => {
+        await fetch(`${API_BASE}/playback/play`, { method: 'POST' });
+      });
+
+      document.getElementById('btn_pause').addEventListener('click', async () => {
+        await fetch(`${API_BASE}/playback/pause`, { method: 'POST' });
+      });
+
+      document.getElementById('btn_stop').addEventListener('click', async () => {
+        await fetch(`${API_BASE}/playback/stop`, { method: 'POST' });
+        loadedFile = null;
+        document.getElementById('btn_play').disabled = true;
+        document.getElementById('btn_pause').disabled = true;
+        document.getElementById('btn_stop').disabled = true;
+        document.getElementById('status_info').style.display = 'none';
+        document.getElementById('view_link').style.display = 'none';
+        stopStatusPolling();
+      });
+
+      document.getElementById('loop_checkbox').addEventListener('change', async (e) => {
+        await fetch(`${API_BASE}/playback/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loopPlayback: e.target.checked })
+        });
+      });
+    }
+
+    // Status polling
+    function startStatusPolling() {
+      stopStatusPolling();
+      statusInterval = setInterval(updateStatus, 500);
+      updateStatus();
+    }
+
+    function stopStatusPolling() {
+      if (statusInterval) {
+        clearInterval(statusInterval);
+        statusInterval = null;
+      }
+    }
+
+    async function updateStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/playback/status`);
+        const status = await res.json();
+
+        if (status.state === 'idle') {
+          document.getElementById('status_info').style.display = 'none';
+          return;
+        }
+
+        document.getElementById('status_filename').textContent = status.filename || '-';
+        document.getElementById('status_state').textContent = status.state || '-';
+        document.getElementById('status_position').textContent =
+          `${formatDuration(status.positionMs || 0)} / ${formatDuration(status.durationMs || 0)}`;
+        document.getElementById('status_frame').textContent =
+          `${status.frame || 0} / ${status.frameCount || 0}`;
+
+        document.getElementById('btn_play').disabled = status.state === 'playing';
+        document.getElementById('btn_pause').disabled = status.state !== 'playing';
+        document.getElementById('loop_checkbox').checked = status.loopPlayback || false;
+
+      } catch (err) {
+        console.error('Status update failed:', err);
+      }
+    }
+
+    // Utilities
+    function formatDuration(ms) {
+      if (!ms || ms <= 0) return '0:00';
+      const seconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+    }
+
+    function formatSize(bytes) {
+      if (!bytes || bytes <= 0) return '0 KB';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function showMessage(text, type) {
+      const el = document.getElementById('message');
+      el.textContent = text;
+      el.className = `message ${type}`;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3000);
+    }
+  </script>
+</body>
+</html>

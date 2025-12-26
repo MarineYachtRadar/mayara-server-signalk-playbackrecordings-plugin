@@ -119,26 +119,21 @@ This plugin:
 
 ## Development
 
-Build options:
+After cloning, install dependencies and build the GUI:
 
 ```bash
-# Build with GUI from npm (default)
-node build.js
-
-# Build with local mayara-gui (for development)
-node build.js --local-gui
-
-# Create tarball for manual install (includes public/)
-node build.js --local-gui --pack
+npm install
+npm run build
 ```
 
-The `--local-gui` option copies GUI files from the sibling `../mayara-gui` directory instead of from npm.
-
-The `--pack` option creates a `.tgz` tarball with `public/` included (normally excluded by `.npmignore`). Install with:
+To use a local `mayara-gui` checkout (sibling directory) instead of npm:
 
 ```bash
-npm install /path/to/marineyachtradar-signalk-playback-plugin-0.1.0.tgz
+npm run build -- --local-gui
 ```
+
+> **Note:** The `public/` directory is gitignored but included in the npm tarball.
+> It's built automatically during `npm publish` via `prepublishOnly`.
 
 ## Related Projects
 

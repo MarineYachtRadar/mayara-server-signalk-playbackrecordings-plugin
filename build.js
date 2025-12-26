@@ -227,18 +227,6 @@ function setupGuiFromLocal() {
 function main() {
   console.log('=== MaYaRa SignalK Playback Plugin Build ===\n')
 
-  // Skip build if public/ already exists with content (installed from --pack tarball)
-  // This prevents postinstall from failing when mayara-gui isn't in node_modules
-  if (fs.existsSync(publicDest) && !useLocalGui && !createPack) {
-    const files = fs.readdirSync(publicDest)
-    if (files.length > 0) {
-      console.log(`public/ already exists with ${files.length} files (installed from tarball)`)
-      console.log('Skipping build.\n')
-      console.log('=== Build complete ===')
-      return
-    }
-  }
-
   if (useLocalGui) {
     setupGuiFromLocal()
   } else {

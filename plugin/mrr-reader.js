@@ -1,315 +1,178 @@
-/**
- * MRR (MaYaRa Radar Recording) file format reader
- *
- * JavaScript port of mayara-server's file_format.rs
- * Reads .mrr binary files containing recorded radar data.
- */
-
-const fs = require('fs')
-const zlib = require('zlib')
-
-// Constants matching Rust implementation
-const MRR_MAGIC = Buffer.from('MRR1')
-const MRR_FOOTER_MAGIC = Buffer.from('MRRF')
-const MRR_VERSION = 1
-const HEADER_SIZE = 256
-const FOOTER_SIZE = 32
-const INDEX_ENTRY_SIZE = 16
-const FRAME_FLAG_HAS_STATE = 0x01
-
-/**
- * Read a little-endian uint16 from buffer
- */
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MrrReader = exports.MrrFrame = exports.MrrFooter = exports.MrrHeader = exports.FRAME_FLAG_HAS_STATE = exports.FOOTER_SIZE = exports.HEADER_SIZE = void 0;
+exports.readU16 = readU16;
+exports.readU32 = readU32;
+exports.readU64 = readU64;
+const fs_1 = __importDefault(require("fs"));
+const zlib_1 = __importDefault(require("zlib"));
+const MRR_MAGIC = Buffer.from('MRR1');
+const MRR_FOOTER_MAGIC = Buffer.from('MRRF');
+const MRR_VERSION = 1;
+exports.HEADER_SIZE = 256;
+exports.FOOTER_SIZE = 32;
+exports.FRAME_FLAG_HAS_STATE = 0x01;
 function readU16(buf, offset) {
-  return buf.readUInt16LE(offset)
+    return buf.readUInt16LE(offset);
 }
-
-/**
- * Read a little-endian uint32 from buffer
- */
 function readU32(buf, offset) {
-  return buf.readUInt32LE(offset)
+    return buf.readUInt32LE(offset);
 }
-
-/**
- * Read a little-endian uint64 from buffer (as BigInt, then convert to Number)
- * Note: JavaScript Numbers can safely represent integers up to 2^53-1
- */
 function readU64(buf, offset) {
-  return Number(buf.readBigUInt64LE(offset))
+    return Number(buf.readBigUInt64LE(offset));
 }
-
-/**
- * MRR file header (256 bytes)
- */
 class MrrHeader {
-  constructor() {
-    this.version = MRR_VERSION
-    this.flags = 0
-    this.radarBrand = 0
-    this.spokesPerRev = 0
-    this.maxSpokeLen = 0
-    this.pixelValues = 0
-    this.startTimeMs = 0
-    this.capabilitiesOffset = 0
-    this.capabilitiesLen = 0
-    this.initialStateOffset = 0
-    this.initialStateLen = 0
-    this.framesOffset = 0
-  }
-
-  /**
-   * Parse header from buffer
-   * @param {Buffer} buf - Buffer containing at least HEADER_SIZE bytes
-   * @returns {MrrHeader}
-   */
-  static fromBuffer(buf) {
-    if (buf.length < HEADER_SIZE) {
-      throw new Error(`Buffer too small for header: ${buf.length} < ${HEADER_SIZE}`)
+    version = MRR_VERSION;
+    flags = 0;
+    radarBrand = 0;
+    spokesPerRev = 0;
+    maxSpokeLen = 0;
+    pixelValues = 0;
+    startTimeMs = 0;
+    capabilitiesOffset = 0;
+    capabilitiesLen = 0;
+    initialStateOffset = 0;
+    initialStateLen = 0;
+    framesOffset = 0;
+    static fromBuffer(buf) {
+        if (buf.length < exports.HEADER_SIZE) {
+            throw new Error(`Buffer too small for header: ${buf.length} < ${exports.HEADER_SIZE}`);
+        }
+        if (!buf.subarray(0, 4).equals(MRR_MAGIC)) {
+            throw new Error('Invalid MRR file: bad magic bytes');
+        }
+        const header = new MrrHeader();
+        header.version = readU16(buf, 4);
+        if (header.version > MRR_VERSION) {
+            throw new Error(`Unsupported MRR version: ${header.version}`);
+        }
+        header.flags = readU16(buf, 6);
+        header.radarBrand = readU32(buf, 8);
+        header.spokesPerRev = readU32(buf, 12);
+        header.maxSpokeLen = readU32(buf, 16);
+        header.pixelValues = readU32(buf, 20);
+        header.startTimeMs = readU64(buf, 24);
+        header.capabilitiesOffset = readU64(buf, 32);
+        header.capabilitiesLen = readU32(buf, 40);
+        header.initialStateOffset = readU64(buf, 44);
+        header.initialStateLen = readU32(buf, 52);
+        header.framesOffset = readU64(buf, 56);
+        return header;
     }
-
-    // Check magic
-    if (!buf.subarray(0, 4).equals(MRR_MAGIC)) {
-      throw new Error('Invalid MRR file: bad magic bytes')
-    }
-
-    const header = new MrrHeader()
-    header.version = readU16(buf, 4)
-
-    if (header.version > MRR_VERSION) {
-      throw new Error(`Unsupported MRR version: ${header.version}`)
-    }
-
-    header.flags = readU16(buf, 6)
-    header.radarBrand = readU32(buf, 8)
-    header.spokesPerRev = readU32(buf, 12)
-    header.maxSpokeLen = readU32(buf, 16)
-    header.pixelValues = readU32(buf, 20)
-    header.startTimeMs = readU64(buf, 24)
-    header.capabilitiesOffset = readU64(buf, 32)
-    header.capabilitiesLen = readU32(buf, 40)
-    header.initialStateOffset = readU64(buf, 44)
-    header.initialStateLen = readU32(buf, 52)
-    header.framesOffset = readU64(buf, 56)
-
-    return header
-  }
 }
-
-/**
- * MRR file footer (32 bytes)
- */
+exports.MrrHeader = MrrHeader;
 class MrrFooter {
-  constructor() {
-    this.indexOffset = 0
-    this.indexCount = 0
-    this.frameCount = 0
-    this.durationMs = 0
-  }
-
-  /**
-   * Parse footer from buffer
-   * @param {Buffer} buf - Buffer containing at least FOOTER_SIZE bytes
-   * @returns {MrrFooter}
-   */
-  static fromBuffer(buf) {
-    if (buf.length < FOOTER_SIZE) {
-      throw new Error(`Buffer too small for footer: ${buf.length} < ${FOOTER_SIZE}`)
+    indexOffset = 0;
+    indexCount = 0;
+    frameCount = 0;
+    durationMs = 0;
+    static fromBuffer(buf) {
+        if (buf.length < exports.FOOTER_SIZE) {
+            throw new Error(`Buffer too small for footer: ${buf.length} < ${exports.FOOTER_SIZE}`);
+        }
+        if (!buf.subarray(0, 4).equals(MRR_FOOTER_MAGIC)) {
+            throw new Error('Invalid MRR footer: bad magic bytes');
+        }
+        const footer = new MrrFooter();
+        footer.indexOffset = readU64(buf, 4);
+        footer.indexCount = readU32(buf, 12);
+        footer.frameCount = readU32(buf, 16);
+        footer.durationMs = readU64(buf, 20);
+        return footer;
     }
-
-    // Check magic
-    if (!buf.subarray(0, 4).equals(MRR_FOOTER_MAGIC)) {
-      throw new Error('Invalid MRR footer: bad magic bytes')
-    }
-
-    const footer = new MrrFooter()
-    footer.indexOffset = readU64(buf, 4)
-    footer.indexCount = readU32(buf, 12)
-    footer.frameCount = readU32(buf, 16)
-    footer.durationMs = readU64(buf, 20)
-
-    return footer
-  }
 }
-
-/**
- * MRR frame data
- */
+exports.MrrFooter = MrrFooter;
 class MrrFrame {
-  constructor() {
-    this.timestampMs = 0
-    this.flags = 0
-    this.data = null      // Buffer - protobuf RadarMessage
-    this.stateDelta = null // Buffer - optional JSON state delta
-  }
-
-  /**
-   * Parse frame from buffer at given offset
-   * @param {Buffer} buf - Full file buffer
-   * @param {number} offset - Start offset of frame
-   * @returns {{frame: MrrFrame, bytesRead: number}}
-   */
-  static fromBuffer(buf, offset) {
-    const frame = new MrrFrame()
-
-    // Timestamp (8 bytes)
-    frame.timestampMs = readU64(buf, offset)
-    offset += 8
-
-    // Flags (1 byte)
-    frame.flags = buf.readUInt8(offset)
-    offset += 1
-
-    // Data length (4 bytes)
-    const dataLen = readU32(buf, offset)
-    offset += 4
-
-    // Data
-    frame.data = buf.subarray(offset, offset + dataLen)
-    offset += dataLen
-
-    // State delta (if present)
-    if (frame.flags & FRAME_FLAG_HAS_STATE) {
-      const stateLen = readU32(buf, offset)
-      offset += 4
-      frame.stateDelta = buf.subarray(offset, offset + stateLen)
-      offset += stateLen
+    timestampMs = 0;
+    flags = 0;
+    data = Buffer.alloc(0);
+    stateDelta = null;
+    static fromBuffer(buf, offset) {
+        const frame = new MrrFrame();
+        let pos = offset;
+        frame.timestampMs = readU64(buf, pos);
+        pos += 8;
+        frame.flags = buf.readUInt8(pos);
+        pos += 1;
+        const dataLen = readU32(buf, pos);
+        pos += 4;
+        frame.data = buf.subarray(pos, pos + dataLen);
+        pos += dataLen;
+        if (frame.flags & exports.FRAME_FLAG_HAS_STATE) {
+            const stateLen = readU32(buf, pos);
+            pos += 4;
+            frame.stateDelta = buf.subarray(pos, pos + stateLen);
+            pos += stateLen;
+        }
+        return { frame, bytesRead: pos };
     }
-
-    return { frame, bytesRead: offset }
-  }
 }
-
-/**
- * MRR file reader
- */
+exports.MrrFrame = MrrFrame;
 class MrrReader {
-  /**
-   * @param {string} filePath - Path to .mrr or .mrr.gz file
-   */
-  constructor(filePath) {
-    this.filePath = filePath
-    this.buffer = null
-    this.header = null
-    this.footer = null
-    this.capabilities = null
-    this.initialState = null
-    this.currentOffset = 0
-    this.currentFrame = 0
-  }
-
-  /**
-   * Load and parse the file
-   * Automatically decompresses .mrr.gz files
-   */
-  async load() {
-    // Read file
-    let data = fs.readFileSync(this.filePath)
-
-    // Decompress if gzipped
-    if (this.filePath.endsWith('.gz') || this.filePath.endsWith('.mrr.gz')) {
-      data = zlib.gunzipSync(data)
+    filePath;
+    buffer = Buffer.alloc(0);
+    header = new MrrHeader();
+    footer = new MrrFooter();
+    capabilities = null;
+    initialState = {};
+    currentOffset = 0;
+    currentFrame = 0;
+    constructor(filePath) {
+        this.filePath = filePath;
     }
-
-    this.buffer = data
-
-    // Parse header
-    this.header = MrrHeader.fromBuffer(this.buffer)
-
-    // Parse footer (at end of file)
-    const footerBuf = this.buffer.subarray(this.buffer.length - FOOTER_SIZE)
-    this.footer = MrrFooter.fromBuffer(footerBuf)
-
-    // Read capabilities JSON
-    const capBuf = this.buffer.subarray(
-      this.header.capabilitiesOffset,
-      this.header.capabilitiesOffset + this.header.capabilitiesLen
-    )
-    this.capabilities = JSON.parse(capBuf.toString('utf8'))
-
-    // Read initial state JSON
-    const stateBuf = this.buffer.subarray(
-      this.header.initialStateOffset,
-      this.header.initialStateOffset + this.header.initialStateLen
-    )
-    this.initialState = JSON.parse(stateBuf.toString('utf8'))
-
-    // Position at first frame
-    this.currentOffset = this.header.framesOffset
-    this.currentFrame = 0
-  }
-
-  /**
-   * Get file metadata
-   */
-  getMetadata() {
-    return {
-      version: this.header.version,
-      radarBrand: this.header.radarBrand,
-      spokesPerRev: this.header.spokesPerRev,
-      maxSpokeLen: this.header.maxSpokeLen,
-      pixelValues: this.header.pixelValues,
-      startTimeMs: this.header.startTimeMs,
-      frameCount: this.footer.frameCount,
-      durationMs: this.footer.durationMs,
-      capabilities: this.capabilities,
-      initialState: this.initialState
+    load() {
+        let data = fs_1.default.readFileSync(this.filePath);
+        if (this.filePath.endsWith('.gz') || this.filePath.endsWith('.mrr.gz')) {
+            data = zlib_1.default.gunzipSync(data);
+        }
+        this.buffer = data;
+        this.header = MrrHeader.fromBuffer(this.buffer);
+        const footerBuf = this.buffer.subarray(this.buffer.length - exports.FOOTER_SIZE);
+        this.footer = MrrFooter.fromBuffer(footerBuf);
+        const capBuf = this.buffer.subarray(this.header.capabilitiesOffset, this.header.capabilitiesOffset + this.header.capabilitiesLen);
+        this.capabilities = JSON.parse(capBuf.toString('utf8'));
+        const stateBuf = this.buffer.subarray(this.header.initialStateOffset, this.header.initialStateOffset + this.header.initialStateLen);
+        this.initialState = JSON.parse(stateBuf.toString('utf8'));
+        this.currentOffset = this.header.framesOffset;
+        this.currentFrame = 0;
     }
-  }
-
-  /**
-   * Read the next frame
-   * @returns {MrrFrame|null} Frame or null if at end
-   */
-  readFrame() {
-    if (this.currentFrame >= this.footer.frameCount) {
-      return null
+    getMetadata() {
+        return {
+            version: this.header.version,
+            radarBrand: this.header.radarBrand,
+            spokesPerRev: this.header.spokesPerRev,
+            maxSpokeLen: this.header.maxSpokeLen,
+            pixelValues: this.header.pixelValues,
+            startTimeMs: this.header.startTimeMs,
+            frameCount: this.footer.frameCount,
+            durationMs: this.footer.durationMs,
+            capabilities: this.capabilities,
+            initialState: this.initialState
+        };
     }
-
-    const { frame, bytesRead } = MrrFrame.fromBuffer(this.buffer, this.currentOffset)
-    this.currentOffset = bytesRead
-    this.currentFrame++
-
-    return frame
-  }
-
-  /**
-   * Reset to beginning
-   */
-  rewind() {
-    this.currentOffset = this.header.framesOffset
-    this.currentFrame = 0
-  }
-
-  /**
-   * Get current position info
-   */
-  getPosition() {
-    return {
-      frame: this.currentFrame,
-      totalFrames: this.footer.frameCount
+    readFrame() {
+        if (this.currentFrame >= this.footer.frameCount) {
+            return null;
+        }
+        const { frame, bytesRead } = MrrFrame.fromBuffer(this.buffer, this.currentOffset);
+        this.currentOffset = bytesRead;
+        this.currentFrame++;
+        return frame;
     }
-  }
-
-  /**
-   * Create an async iterator for frames
-   * Useful for playback with timing
-   */
-  *frames() {
-    this.rewind()
-    let frame
-    while ((frame = this.readFrame()) !== null) {
-      yield frame
+    rewind() {
+        this.currentOffset = this.header.framesOffset;
+        this.currentFrame = 0;
     }
-  }
+    *frames() {
+        this.rewind();
+        let frame;
+        while ((frame = this.readFrame()) !== null) {
+            yield frame;
+        }
+    }
 }
-
-module.exports = {
-  MrrReader,
-  MrrHeader,
-  MrrFooter,
-  MrrFrame,
-  HEADER_SIZE,
-  FOOTER_SIZE,
-  FRAME_FLAG_HAS_STATE
-}
+exports.MrrReader = MrrReader;
+//# sourceMappingURL=mrr-reader.js.map

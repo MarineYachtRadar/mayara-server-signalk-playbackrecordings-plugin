@@ -2,3 +2,9 @@
 .github/
 node_modules/
 *.tgz
+src/
+test/
+tsconfig.json
+eslint.config.mjs
+prettier.config.mjs
+vitest.config.ts

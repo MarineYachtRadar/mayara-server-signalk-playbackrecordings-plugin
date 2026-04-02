@@ -8,6 +8,16 @@ const path_1 = __importDefault(require("path"));
 const zlib_1 = __importDefault(require("zlib"));
 const mrr_reader_1 = require("./mrr-reader");
 const mrr_player_1 = require("./mrr-player");
+const MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
+function safeMrrFilename(filename) {
+    const base = path_1.default.basename(filename);
+    if (base !== filename ||
+        filename.includes('..') ||
+        (!filename.endsWith('.mrr') && !filename.endsWith('.mrr.gz'))) {
+        return null;
+    }
+    return base;
+}
 module.exports = function (app) {
     let player = null;
     let recordingsDir = '';
@@ -198,31 +208,57 @@ module.exports = function (app) {
                 }
             });
             router.post('/recordings/upload', (req, res) => {
-                try {
-                    const chunks = [];
-                    req.on('data', (chunk) => chunks.push(chunk));
-                    req.on('end', () => {
+                const chunks = [];
+                let totalSize = 0;
+                let aborted = false;
+                req.on('data', (chunk) => {
+                    totalSize += chunk.length;
+                    if (totalSize > MAX_UPLOAD_SIZE) {
+                        aborted = true;
+                        req.destroy();
+                        res.status(413).json({ error: 'Upload too large' });
+                        return;
+                    }
+                    chunks.push(chunk);
+                });
+                req.on('error', (err) => {
+                    if (!aborted) {
+                        res.status(500).json({ error: err.message });
+                    }
+                });
+                req.on('end', () => {
+                    if (aborted)
+                        return;
+                    try {
                         const body = Buffer.concat(chunks);
                         let filename = `upload_${Date.now()}.mrr`;
                         const contentDisp = req.headers['content-disposition'];
                         if (contentDisp) {
                             const match = /filename="?([^";\s]+)"?/.exec(contentDisp);
-                            if (match)
-                                filename = match[1];
+                            if (match) {
+                                const safe = safeMrrFilename(match[1]);
+                                if (safe)
+                                    filename = safe;
+                            }
                         }
                         const filePath = path_1.default.join(recordingsDir, filename);
                         fs_1.default.writeFileSync(filePath, body);
                         app.debug(`Uploaded recording: ${filename} (${body.length} bytes)`);
                         res.json({ filename, size: body.length });
-                    });
-                }
-                catch (err) {
-                    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
-                }
+                    }
+                    catch (err) {
+                        res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+                    }
+                });
             });
             router.delete('/recordings/:filename', (req, res) => {
                 try {
-                    const filePath = path_1.default.join(recordingsDir, req.params.filename);
+                    const safe = safeMrrFilename(req.params.filename);
+                    if (!safe) {
+                        res.status(400).json({ error: 'Invalid filename' });
+                        return;
+                    }
+                    const filePath = path_1.default.join(recordingsDir, safe);
                     if (!fs_1.default.existsSync(filePath)) {
                         res.status(404).json({ error: 'Recording not found' });
                         return;
@@ -241,7 +277,12 @@ module.exports = function (app) {
                         res.status(400).json({ error: 'filename required' });
                         return;
                     }
-                    const filePath = path_1.default.join(recordingsDir, filename);
+                    const safe = safeMrrFilename(filename);
+                    if (!safe) {
+                        res.status(400).json({ error: 'Invalid filename' });
+                        return;
+                    }
+                    const filePath = path_1.default.join(recordingsDir, safe);
                     if (!fs_1.default.existsSync(filePath)) {
                         res.status(404).json({ error: 'Recording not found' });
                         return;

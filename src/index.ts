@@ -7,6 +7,20 @@ import { MrrHeader, MrrFooter, FOOTER_SIZE } from './mrr-reader'
 import { MrrPlayer } from './mrr-player'
 import { PlaybackServerAPI, PlaybackSettings, RecordingInfo } from './types'
 
+const MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+
+function safeMrrFilename(filename: string): string | null {
+  const base = path.basename(filename)
+  if (
+    base !== filename ||
+    filename.includes('..') ||
+    (!filename.endsWith('.mrr') && !filename.endsWith('.mrr.gz'))
+  ) {
+    return null
+  }
+  return base
+}
+
 module.exports = function (app: PlaybackServerAPI): Plugin {
   let player: MrrPlayer | null = null
   let recordingsDir: string = ''
@@ -221,17 +235,40 @@ module.exports = function (app: PlaybackServerAPI): Plugin {
       })
 
       router.post('/recordings/upload', (req: Request, res: Response) => {
-        try {
-          const chunks: Buffer[] = []
-          req.on('data', (chunk: Buffer) => chunks.push(chunk))
-          req.on('end', () => {
+        const chunks: Buffer[] = []
+        let totalSize = 0
+        let aborted = false
+
+        req.on('data', (chunk: Buffer) => {
+          totalSize += chunk.length
+          if (totalSize > MAX_UPLOAD_SIZE) {
+            aborted = true
+            req.destroy()
+            res.status(413).json({ error: 'Upload too large' })
+            return
+          }
+          chunks.push(chunk)
+        })
+
+        req.on('error', (err: Error) => {
+          if (!aborted) {
+            res.status(500).json({ error: err.message })
+          }
+        })
+
+        req.on('end', () => {
+          if (aborted) return
+          try {
             const body = Buffer.concat(chunks)
 
             let filename = `upload_${Date.now()}.mrr`
             const contentDisp = req.headers['content-disposition']
             if (contentDisp) {
               const match = /filename="?([^";\s]+)"?/.exec(contentDisp)
-              if (match) filename = match[1]
+              if (match) {
+                const safe = safeMrrFilename(match[1])
+                if (safe) filename = safe
+              }
             }
 
             const filePath = path.join(recordingsDir, filename)
@@ -239,17 +276,22 @@ module.exports = function (app: PlaybackServerAPI): Plugin {
 
             app.debug(`Uploaded recording: ${filename} (${body.length} bytes)`)
             res.json({ filename, size: body.length })
-          })
-        } catch (err) {
-          res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' })
-        }
+          } catch (err) {
+            res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' })
+          }
+        })
       })
 
       router.delete(
         '/recordings/:filename',
         (req: Request<{ filename: string }>, res: Response) => {
           try {
-            const filePath = path.join(recordingsDir, req.params.filename)
+            const safe = safeMrrFilename(req.params.filename)
+            if (!safe) {
+              res.status(400).json({ error: 'Invalid filename' })
+              return
+            }
+            const filePath = path.join(recordingsDir, safe)
             if (!fs.existsSync(filePath)) {
               res.status(404).json({ error: 'Recording not found' })
               return
@@ -270,7 +312,13 @@ module.exports = function (app: PlaybackServerAPI): Plugin {
             return
           }
 
-          const filePath = path.join(recordingsDir, filename)
+          const safe = safeMrrFilename(filename)
+          if (!safe) {
+            res.status(400).json({ error: 'Invalid filename' })
+            return
+          }
+
+          const filePath = path.join(recordingsDir, safe)
           if (!fs.existsSync(filePath)) {
             res.status(404).json({ error: 'Recording not found' })
             return

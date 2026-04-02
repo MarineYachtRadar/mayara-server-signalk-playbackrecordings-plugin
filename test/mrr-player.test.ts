@@ -90,6 +90,27 @@ describe('MrrPlayer', () => {
     expect(player.getStatus().state).toBe('loaded')
   })
 
+  it('reports paused when paused at frame 0', () => {
+    vi.useFakeTimers()
+    const app = createMockApp()
+    const player = new MrrPlayer(app, tmpFile)
+    player.load()
+
+    player.play()
+    player.pause()
+
+    expect(player.currentFrame).toBe(1)
+    expect(player.getStatus().state).toBe('paused')
+
+    player.stop()
+    player.play()
+    player.pause()
+
+    expect(player.getStatus().state).toBe('paused')
+    player.stop()
+    vi.useRealTimers()
+  })
+
   it('emits frames via binaryStreamManager', () => {
     vi.useFakeTimers()
     const app = createMockApp()

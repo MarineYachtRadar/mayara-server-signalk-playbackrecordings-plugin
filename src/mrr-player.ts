@@ -16,6 +16,7 @@ export class MrrPlayer {
   durationMs = 0
   frameCount = 0
   playing = false
+  private paused = false
   loop = true
   currentFrame = 0
   positionMs = 0
@@ -59,11 +60,13 @@ export class MrrPlayer {
   play(): void {
     if (this.playing) return
     this.playing = true
+    this.paused = false
     this.scheduleNextFrame()
   }
 
   pause(): void {
     this.playing = false
+    this.paused = true
     if (this.playbackTimer) {
       clearTimeout(this.playbackTimer)
       this.playbackTimer = null
@@ -72,6 +75,7 @@ export class MrrPlayer {
 
   stop(): void {
     this.pause()
+    this.paused = false
     this.currentFrame = 0
     this.positionMs = 0
   }
@@ -89,7 +93,7 @@ export class MrrPlayer {
     let state: PlaybackState
     if (this.playing) {
       state = 'playing'
-    } else if (this.currentFrame > 0) {
+    } else if (this.paused) {
       state = 'paused'
     } else {
       state = 'loaded'

@@ -93,17 +93,30 @@ class MrrFrame {
     static fromBuffer(buf, offset) {
         const frame = new MrrFrame();
         let pos = offset;
+        const remaining = buf.length - pos;
+        if (remaining < 13) {
+            throw new Error(`Frame too small at offset ${offset}: need 13 bytes, have ${remaining}`);
+        }
         frame.timestampMs = readU64(buf, pos);
         pos += 8;
         frame.flags = buf.readUInt8(pos);
         pos += 1;
         const dataLen = readU32(buf, pos);
         pos += 4;
+        if (pos + dataLen > buf.length) {
+            throw new Error(`Frame data overflows buffer at offset ${offset}: dataLen=${dataLen}, available=${buf.length - pos}`);
+        }
         frame.data = buf.subarray(pos, pos + dataLen);
         pos += dataLen;
         if (frame.flags & exports.FRAME_FLAG_HAS_STATE) {
+            if (pos + 4 > buf.length) {
+                throw new Error(`Frame state length overflows buffer at offset ${pos}`);
+            }
             const stateLen = readU32(buf, pos);
             pos += 4;
+            if (pos + stateLen > buf.length) {
+                throw new Error(`Frame state data overflows buffer at offset ${pos}: stateLen=${stateLen}, available=${buf.length - pos}`);
+            }
             frame.stateDelta = buf.subarray(pos, pos + stateLen);
             pos += stateLen;
         }
@@ -132,9 +145,17 @@ class MrrReader {
         this.header = MrrHeader.fromBuffer(this.buffer);
         const footerBuf = this.buffer.subarray(this.buffer.length - exports.FOOTER_SIZE);
         this.footer = MrrFooter.fromBuffer(footerBuf);
-        const capBuf = this.buffer.subarray(this.header.capabilitiesOffset, this.header.capabilitiesOffset + this.header.capabilitiesLen);
+        const capEnd = this.header.capabilitiesOffset + this.header.capabilitiesLen;
+        if (capEnd > this.buffer.length) {
+            throw new Error(`Capabilities section overflows buffer: ${capEnd} > ${this.buffer.length}`);
+        }
+        const capBuf = this.buffer.subarray(this.header.capabilitiesOffset, capEnd);
         this.capabilities = JSON.parse(capBuf.toString('utf8'));
-        const stateBuf = this.buffer.subarray(this.header.initialStateOffset, this.header.initialStateOffset + this.header.initialStateLen);
+        const stateEnd = this.header.initialStateOffset + this.header.initialStateLen;
+        if (stateEnd > this.buffer.length) {
+            throw new Error(`Initial state section overflows buffer: ${stateEnd} > ${this.buffer.length}`);
+        }
+        const stateBuf = this.buffer.subarray(this.header.initialStateOffset, stateEnd);
         this.initialState = JSON.parse(stateBuf.toString('utf8'));
         this.currentOffset = this.header.framesOffset;
         this.currentFrame = 0;

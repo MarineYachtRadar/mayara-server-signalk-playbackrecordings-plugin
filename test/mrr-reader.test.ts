@@ -132,6 +132,19 @@ describe('MrrFrame', () => {
       expect(delta.toString('utf8')).toBe(stateJson)
     }
   })
+
+  it('throws on truncated frame', () => {
+    const buf = Buffer.alloc(5)
+    expect(() => MrrFrame.fromBuffer(buf, 0)).toThrow('Frame too small')
+  })
+
+  it('throws when data length overflows buffer', () => {
+    const buf = Buffer.alloc(13)
+    buf.writeBigUInt64LE(BigInt(0), 0)
+    buf.writeUInt8(0, 8)
+    buf.writeUInt32LE(9999, 9)
+    expect(() => MrrFrame.fromBuffer(buf, 0)).toThrow('overflows buffer')
+  })
 })
 
 describe('MrrReader', () => {

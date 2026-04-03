@@ -2,6 +2,14 @@
 
 A SignalK plugin for playing back `.mrr` radar recordings through the SignalK Radar API.
 
+## Prerequisites
+
+This plugin requires SignalK server with the **Radar API** enabled. The Radar API is not yet in upstream SignalK — it is available via:
+
+- **PR [SignalK/signalk-server#2357](https://github.com/SignalK/signalk-server/pull/2357)** — Radar API refactored
+
+Until that PR is merged, use a SignalK server build that includes the Radar API (e.g. from the `radar_api` branch).
+
 ## What This Plugin Does
 
 This plugin allows you to play pre-recorded radar data (`.mrr` files) through SignalK's Radar API. During playback, the recording appears as a virtual radar that any SignalK radar consumer can connect to and display.
@@ -28,7 +36,7 @@ Install from the **SignalK App Store**:
 
 After installation, navigate to:
 ```
-http://your-signalk-server:3000/plugins/@marineyachtradar/signalk-playback-plugin/playback.html
+http://your-signalk-server:3000/@marineyachtradar/signalk-playback-plugin/playback.html
 ```
 
 Or find it in SignalK's **Webapps** menu.
@@ -57,20 +65,9 @@ Click **View Radar** to open the radar display. This shows the playback radar us
 
 During playback, the recording registers as a virtual radar in SignalK. The radar ID follows the pattern `playback-{filename}`.
 
-### Using mayara-server-signalk-plugin
-
-If you have the **mayara-server-signalk-plugin** installed (the main MaYaRa radar plugin), you can also view playback recordings through its interface:
-
-1. Start playback in this plugin
-2. Open the mayara-server-signalk-plugin's radar viewer
-3. The playback radar will appear in the radar list
-4. Select it to view the recording with full MaYaRa GUI features
-
-### Using Other SignalK Radar Consumers
-
 Any application that implements the SignalK Radar API can display the playback:
 - The radar appears at `/signalk/v2/api/vessels/self/radars/playback-{filename}`
-- Spoke data streams via SignalK's binary WebSocket
+- Spoke data streams via SignalK's binary WebSocket at `/signalk/v2/api/vessels/self/radars/{id}/stream`
 
 ## Obtaining Recording Files
 
@@ -90,55 +87,35 @@ Recording files (`.mrr`) are created by **mayara-server** when connected to a li
 
 Both formats are supported for upload. Files are stored uncompressed on the server for fast playback.
 
-## Troubleshooting
-
-**Recording won't load:**
-- Check the SignalK server logs for errors
-- Ensure the file is a valid `.mrr` or `.mrr.gz` file
-- Verify the file wasn't corrupted during transfer
-
-**No radar appears in SignalK:**
-- Make sure playback is started (not just loaded)
-- Refresh the radar consumer application
-- Check that SignalK's Radar API is enabled
-
-**Playback stutters:**
-- This can happen on slower systems with large recordings
-- Try using recordings with fewer spokes per revolution
-
-## Technical Details
-
-This plugin:
-- Reads `.mrr` files directly (no mayara-server required)
-- Registers as a RadarProvider via SignalK's Radar API
-- Emits spoke frames through SignalK's `binaryStreamManager`
-- Plays back frames at their original recorded timing
-- Sets power status to "transmit" so GUI shows radar as active (not STANDBY)
-- Pre-loads all frames for accurate timing
-- Auto-stops current playback when loading a different file
-
 ## Development
 
-After cloning, install dependencies and build the GUI:
+### Building
+
+The GUI is sourced from [mayara-server](https://github.com/MarineYachtRadar/mayara-server)'s `web/gui/` directory (expected as a sibling checkout at `../mayara-server/`).
 
 ```bash
 npm install
 npm run build
 ```
 
-To use a local `mayara-gui` checkout (sibling directory) instead of npm:
+To specify a different GUI source path:
 
 ```bash
-npm run build -- --local-gui
+node build.js --gui-path /path/to/mayara-server/web/gui
 ```
 
-> **Note:** The `public/` directory is gitignored but included in the npm tarball.
-> It's built automatically during `npm publish` via `prepublishOnly`.
+### Scripts
+
+- `npm run format` — prettier + eslint --fix
+- `npm run lint` — eslint check
+- `npm run build` — compile TypeScript + copy GUI
+- `npm run test` — run tests (vitest)
+- `npm run build:all` — lint + build + test
 
 ## Related Projects
 
-- **[mayara-server](https://github.com/MaYaRa-Marine/mayara-server)** - Standalone radar server (creates recordings)
-- **[mayara-server-signalk-plugin](https://github.com/MaYaRa-Marine/mayara-server-signalk-plugin)** - SignalK plugin for live radar (connects to mayara-server)
+- **[mayara-server](https://github.com/MarineYachtRadar/mayara-server)** - Standalone radar server (creates recordings, provides GUI)
+- **[signalk-server#2357](https://github.com/SignalK/signalk-server/pull/2357)** - Radar API for SignalK server
 
 ## License
 

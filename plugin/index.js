@@ -52,6 +52,7 @@ module.exports = function (app) {
                     id: player.radarId,
                     make: 'Playback',
                     model: 'Recording',
+                    pixelValues: player.pixelValues,
                     characteristics: {
                         spokesPerRevolution: player.spokesPerRev,
                         maxSpokeLength: player.maxSpokeLen,
@@ -150,6 +151,7 @@ module.exports = function (app) {
         id: 'mayara-server-signalk-playbackrecordings-plugin',
         name: 'MaYaRa Radar Playback',
         description: 'Play .mrr radar recordings through SignalK Radar API (Developer Tool)',
+        enabledByDefault: true,
         schema: () => ({
             type: 'object',
             title: 'MaYaRa Radar Playback Settings',
